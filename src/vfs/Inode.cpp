@@ -22,6 +22,7 @@ Inode::Inode(std::string name, uint32_t id, uint16_t posixMode, const std::strin
     for (int i = 0; i < 12; ++i) {
         data.directBlocks[i] = 0; // 0 means unallocated
     }
+    data.indirectBlock = 0;
 }
 
 Inode::Inode(std::string name, const DiskInode& diskData)

@@ -1,6 +1,5 @@
 # Secure Virtual File System (SVF) V2
 
-![Build Status](https://img.shields.io/github/actions/workflow/status/username/svf/build.yml?branch=main)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![C++ Standard](https://img.shields.io/badge/C%2B%2B-17-orange.svg)
 

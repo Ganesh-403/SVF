@@ -188,8 +188,8 @@ bool FileSystem::writeFile(int fd, const std::string& content) {
     
     uint32_t contentSize = content.size();
     
-    if (contentSize > 12 * disk.getSuperblock().blockSize) {
-        std::cerr << "ERROR: Content exceeds maximum file size.\n";
+    if (contentSize > (12 + 1024) * disk.getSuperblock().blockSize) {
+        std::cerr << "ERROR: Content exceeds maximum file size (4.2MB via indirect blocks).\n";
         inode->unlockWrite();
         return false;
     }
@@ -201,17 +201,44 @@ bool FileSystem::writeFile(int fd, const std::string& content) {
     }
 
     uint32_t bytesWritten = 0;
+    uint32_t indirectPointers[1024] = {0};
+    bool indirectLoaded = false;
+    bool indirectModified = false;
+
+    // Load indirect block if it exists and we need it
+    if (blocksNeeded > 12 && inode->getIndirectBlock() != 0) {
+        disk.readBlock(inode->getIndirectBlock(), reinterpret_cast<char*>(indirectPointers));
+        indirectLoaded = true;
+    }
     
     for (uint32_t i = 0; i < blocksNeeded; ++i) {
-        uint32_t blockNum = inode->getBlockPointer(i);
-        if (blockNum == 0) {
-            blockNum = disk.allocateBlock();
-            if (blockNum == 0) { 
-                std::cerr << "ERROR: Disk is completely full!\n"; 
-                inode->unlockWrite();
-                return false; 
+        uint32_t blockNum = 0;
+        
+        if (i < 12) {
+            blockNum = inode->getBlockPointer(i);
+            if (blockNum == 0) {
+                blockNum = disk.allocateBlock();
+                if (blockNum == 0) { std::cerr << "ERROR: Disk is completely full!\n"; inode->unlockWrite(); return false; }
+                inode->setBlockPointer(i, blockNum);
             }
-            inode->setBlockPointer(i, blockNum);
+        } else {
+            // Allocate the indirect block itself if not allocated
+            if (inode->getIndirectBlock() == 0) {
+                uint32_t indirBlock = disk.allocateBlock();
+                if (indirBlock == 0) { std::cerr << "ERROR: Disk is completely full!\n"; inode->unlockWrite(); return false; }
+                inode->setIndirectBlock(indirBlock);
+                indirectLoaded = true;
+                indirectModified = true;
+            }
+            
+            int indirectIndex = i - 12;
+            blockNum = indirectPointers[indirectIndex];
+            if (blockNum == 0) {
+                blockNum = disk.allocateBlock();
+                if (blockNum == 0) { std::cerr << "ERROR: Disk is completely full!\n"; inode->unlockWrite(); return false; }
+                indirectPointers[indirectIndex] = blockNum;
+                indirectModified = true;
+            }
         }
         
         char buffer[4096] = {0};
@@ -222,6 +249,10 @@ bool FileSystem::writeFile(int fd, const std::string& content) {
         bytesWritten += chunkSize;
     }
     
+    if (indirectModified) {
+        disk.writeBlock(inode->getIndirectBlock(), reinterpret_cast<const char*>(indirectPointers));
+    }
+
     inode->setSize(contentSize);
     std::cout << "Wrote " << contentSize << " bytes to physical disk blocks under Exclusive Lock.\n";
     
@@ -253,8 +284,18 @@ std::string FileSystem::readFile(int fd) {
     std::string result = "";
     uint32_t bytesRead = 0;
     
+    uint32_t indirectPointers[1024] = {0};
+    if (blocksNeeded > 12 && inode->getIndirectBlock() != 0) {
+        disk.readBlock(inode->getIndirectBlock(), reinterpret_cast<char*>(indirectPointers));
+    }
+    
     for (uint32_t i = 0; i < blocksNeeded; ++i) {
-        uint32_t blockNum = inode->getBlockPointer(i);
+        uint32_t blockNum = 0;
+        if (i < 12) {
+            blockNum = inode->getBlockPointer(i);
+        } else {
+            blockNum = indirectPointers[i - 12];
+        }
         if (blockNum == 0) break;
         
         char buffer[4096];

@@ -1,12 +1,11 @@
 # ninja log v6
-66	362	8000239856904343	CMakeFiles/svf.dir/src/vfs/Inode.cpp.obj	37e6567b135a0102
+104	847	8000252891389547	CMakeFiles/svf.dir/src/vfs/Inode.cpp.obj	37e6567b135a0102
 6	578	8000237431329752	CMakeFiles/svf.dir/src/auth/AuthManager.cpp.obj	597d0feef1882a37
 14	388	8000238394529070	CMakeFiles/svf.dir/src/storage/VirtualDisk.cpp.obj	69e33ff5e16ebc0a
 34	618	8000237431612539	CMakeFiles/svf.dir/src/auth/CryptoUtils.cpp.obj	e7b60d46e3fdbbf5
-40	915	8000239856719898	CMakeFiles/svf.dir/src/vfs/FileSystem.cpp.obj	710f16ea039bae88
-6	1399	8000239856309124	CMakeFiles/svf.dir/src/main.cpp.obj	efacdf43d43fa3b
-1399	1644	8000239870240553	svf.exe	b5d5537b67796088
-52	331	8000240780422364	CMakeFiles/svf.dir/src/vfs/Inode.cpp.obj	37e6567b135a0102
-27	887	8000240780165070	CMakeFiles/svf.dir/src/vfs/FileSystem.cpp.obj	710f16ea039bae88
-4	1337	8000240779904606	CMakeFiles/svf.dir/src/main.cpp.obj	efacdf43d43fa3b
-1337	1639	8000240793238380	svf.exe	b5d5537b67796088
+52	2425	8000252890820761	CMakeFiles/svf.dir/src/vfs/FileSystem.cpp.obj	710f16ea039bae88
+11	4409	8000252890446471	CMakeFiles/svf.dir/src/main.cpp.obj	efacdf43d43fa3b
+4410	4874	8000252934440850	svf.exe	b5d5537b67796088
+52	767	8000264178139465	CMakeFiles/svf.dir/src/storage/BTree.cpp.obj	4098b349fc88371e
+10	941	8000264177721246	CMakeFiles/svf.dir/src/fuse/fuse_wrapper.cpp.obj	384ade74f279a257
+942	1313	8000264187035421	svf.exe	480db25b0e3ea997

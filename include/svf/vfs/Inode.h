@@ -28,6 +28,7 @@ struct DiskInode {
     uint64_t creationTime;
     uint64_t modificationTime;
     uint32_t directBlocks[12];
+    uint32_t indirectBlock; // Points to a block containing 1024 uint32_t block pointers
 };
 #pragma pack(pop)
 
@@ -54,12 +55,15 @@ public:
 
     uint32_t getBlockPointer(int index) const {
         if (index >= 0 && index < 12) return data.directBlocks[index];
-        return 0;
+        return 0; // Handled dynamically for indirect blocks
     }
     
     void setBlockPointer(int index, uint32_t blockNum) {
         if (index >= 0 && index < 12) data.directBlocks[index] = blockNum;
     }
+    
+    uint32_t getIndirectBlock() const { return data.indirectBlock; }
+    void setIndirectBlock(uint32_t blockNum) { data.indirectBlock = blockNum; }
     
     uint16_t getMode() const { return data.mode; }
     void setMode(uint16_t newMode) { data.mode = newMode; }

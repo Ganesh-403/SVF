@@ -58,12 +58,26 @@ build CMakeFiles/svf.dir/src/auth/CryptoUtils.cpp.obj: CXX_COMPILER__svf_unscann
   OBJECT_DIR = CMakeFiles\svf.dir
   OBJECT_FILE_DIR = CMakeFiles\svf.dir\src\auth
 
+build CMakeFiles/svf.dir/src/fuse/fuse_wrapper.cpp.obj: CXX_COMPILER__svf_unscanned_ D$:/Personal$ Projects/SVF/src/fuse/fuse_wrapper.cpp || cmake_object_order_depends_target_svf
+  DEP_FILE = CMakeFiles\svf.dir\src\fuse\fuse_wrapper.cpp.obj.d
+  FLAGS = -std=gnu++17
+  INCLUDES = -I"D:/Personal Projects/SVF/include"
+  OBJECT_DIR = CMakeFiles\svf.dir
+  OBJECT_FILE_DIR = CMakeFiles\svf.dir\src\fuse
+
 build CMakeFiles/svf.dir/src/main.cpp.obj: CXX_COMPILER__svf_unscanned_ D$:/Personal$ Projects/SVF/src/main.cpp || cmake_object_order_depends_target_svf
   DEP_FILE = CMakeFiles\svf.dir\src\main.cpp.obj.d
   FLAGS = -std=gnu++17
   INCLUDES = -I"D:/Personal Projects/SVF/include"
   OBJECT_DIR = CMakeFiles\svf.dir
   OBJECT_FILE_DIR = CMakeFiles\svf.dir\src
+
+build CMakeFiles/svf.dir/src/storage/BTree.cpp.obj: CXX_COMPILER__svf_unscanned_ D$:/Personal$ Projects/SVF/src/storage/BTree.cpp || cmake_object_order_depends_target_svf
+  DEP_FILE = CMakeFiles\svf.dir\src\storage\BTree.cpp.obj.d
+  FLAGS = -std=gnu++17
+  INCLUDES = -I"D:/Personal Projects/SVF/include"
+  OBJECT_DIR = CMakeFiles\svf.dir
+  OBJECT_FILE_DIR = CMakeFiles\svf.dir\src\storage
 
 build CMakeFiles/svf.dir/src/storage/VirtualDisk.cpp.obj: CXX_COMPILER__svf_unscanned_ D$:/Personal$ Projects/SVF/src/storage/VirtualDisk.cpp || cmake_object_order_depends_target_svf
   DEP_FILE = CMakeFiles\svf.dir\src\storage\VirtualDisk.cpp.obj.d
@@ -94,7 +108,7 @@ build CMakeFiles/svf.dir/src/vfs/Inode.cpp.obj: CXX_COMPILER__svf_unscanned_ D$:
 #############################################
 # Link the executable svf.exe
 
-build svf.exe: CXX_EXECUTABLE_LINKER__svf_ CMakeFiles/svf.dir/src/auth/AuthManager.cpp.obj CMakeFiles/svf.dir/src/auth/CryptoUtils.cpp.obj CMakeFiles/svf.dir/src/main.cpp.obj CMakeFiles/svf.dir/src/storage/VirtualDisk.cpp.obj CMakeFiles/svf.dir/src/vfs/FileSystem.cpp.obj CMakeFiles/svf.dir/src/vfs/Inode.cpp.obj
+build svf.exe: CXX_EXECUTABLE_LINKER__svf_ CMakeFiles/svf.dir/src/auth/AuthManager.cpp.obj CMakeFiles/svf.dir/src/auth/CryptoUtils.cpp.obj CMakeFiles/svf.dir/src/fuse/fuse_wrapper.cpp.obj CMakeFiles/svf.dir/src/main.cpp.obj CMakeFiles/svf.dir/src/storage/BTree.cpp.obj CMakeFiles/svf.dir/src/storage/VirtualDisk.cpp.obj CMakeFiles/svf.dir/src/vfs/FileSystem.cpp.obj CMakeFiles/svf.dir/src/vfs/Inode.cpp.obj
   LINK_LIBRARIES = -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
   OBJECT_DIR = CMakeFiles\svf.dir
   POST_BUILD = cd .
