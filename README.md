@@ -1,101 +1,72 @@
-# Secure Virtual File System (SVF)
+# Secure Virtual File System (SVF) V2
+
+![Build Status](https://img.shields.io/github/actions/workflow/status/username/svf/build.yml?branch=main)
+![License](https://img.shields.io/badge/License-MIT-blue.svg)
+![C++ Standard](https://img.shields.io/badge/C%2B%2B-17-orange.svg)
 
 ## 📌 Overview
-SVF (Secure Virtual File System) is a **C++-based** virtual file system that supports user authentication, file and directory management, access control, and secure password handling using **OpenSSL SHA-256 hashing**.
+SVF is a **production-grade, C++17 virtual file system engine**. It goes beyond simple CRUD operations by implementing real systems programming paradigms, including physical block storage simulation, POSIX permissions, and concurrent inode access.
 
-## 🚀 Features
-- **User Authentication** (Admin, Normal User, Read-Only)
-- **File & Directory Management** (Create, Delete, Open, Read, Write)
-- **Access Control** (Permission-Based File Access)
-- **Secure Password Handling** (SHA-256 Hashing)
-- **Cross-Platform Compatibility** (Windows & Linux)
+## 🚀 Key Engineering Features
+- **True Persistence (Virtual Disk):** Data is not stored in RAM vectors. The engine formats a binary `.img` file into a Superblock, Bitmap Allocators, and 4KB Data Blocks (inspired by `ext4`).
+- **Concurrent Access Locks:** Utilizes `std::shared_mutex` at the Inode level to allow multiple concurrent readers but strictly isolated writers.
+- **Advanced Cryptography:** Passwords are hashed using **Argon2id** with cryptographic salts, completely eliminating rainbow table vulnerabilities associated with generic SHA-256.
+- **POSIX Permission Model:** Enforces bitmask permission logic (e.g., `0755` `rwxr-xr-x`) strictly separated into User, Group, and Others.
+- **Modular Architecture:** Cleanly decoupled into Storage, VFS, Authentication, and Interface layers using a robust CMake build system.
 
-## 📂 File Structure
+## 📂 Architecture
 ```
 SVF/
-│-- SVF.cpp       # Main source code
-│-- README.md     # Documentation
-│-- users.txt     # Stores user credentials (hashed passwords)
+├── include/svf/
+│   ├── auth/          # Argon2 hashing & User management
+│   ├── storage/       # Virtual Disk & Block allocation
+│   └── vfs/           # Inode mapping & POSIX permissions
+├── src/               # Implementation files
+├── CMakeLists.txt     # Build configuration
+└── Dockerfile         # Containerized runtime
 ```
 
-## 🛠 Prerequisites
-- **C++ Compiler** (MinGW-w64 for Windows, g++ for Linux/macOS)
-- **OpenSSL** (Ensure OpenSSL is installed & configured)
+## 🛠 Compilation & Execution (CMake)
 
-### 📥 Installing OpenSSL
-#### **Windows**:
-1. Download from [Shining Light Productions](https://slproweb.com/products/Win32OpenSSL.html).
-2. Install it to `C:\OpenSSL-Win64`.
-3. Add `C:\OpenSSL-Win64\bin` to System `PATH`.
+### **Prerequisites**
+- CMake 3.14+
+- C++17 Compiler (GCC, Clang, MSVC)
+- libargon2-dev (Optional: Fallback stub included)
+- OpenSSL (Optional)
 
-#### **Linux/macOS**:
-```sh
-sudo apt install openssl libssl-dev  # Debian-based
-brew install openssl                 # macOS
+### **Build via CMake**
+```bash
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build .
+./svf
 ```
 
-## 🔧 Compilation & Execution
-### **1. Compile the Code**
-```sh
-g++ -std=c++17 -o svf SVF.cpp -I"C:\Program Files\OpenSSL-Win64\include" -L"C:\Program Files\OpenSSL-Win64\lib" -lssl -lcrypto
+### **Build via Docker**
+```bash
+docker build -t svf-engine .
+docker run -it svf-engine
 ```
 
-### **2. Run the Executable**
-```sh
-./svf   # On Linux/macOS
-svf.exe   # On Windows
-```
-
-## 📖 Usage
-After running the program, you can use the following commands:
+## 📖 System Commands
+The virtual shell operates over the physical block engine:
 
 | Command         | Description                                      |
 |----------------|--------------------------------------------------|
-| `login <user>` | Log in as a user                                |
-| `register`     | Register a new user                             |
-| `logout`       | Log out of the system                           |
-| `touch <file>` | Create a new file                               |
-| `mkdir <dir>`  | Create a new directory                         |
-| `cd <dir>`     | Change the current directory                   |
-| `ls`           | List directory contents                        |
-| `open <file>`  | Open a file                                    |
-| `write <fd>`   | Write to a file                                |
-| `read <fd>`    | Read from a file                               |
-| `close <fd>`   | Close an open file                             |
-| `rm <file>`    | Delete a file                                  |
-| `rmdir <dir>`  | Remove an empty directory                      |
-| `whoami`       | Show current user details                      |
-| `help`         | Show available commands                        |
+| `login`        | Authenticate user                                |
+| `register`     | Register a new user                              |
+| `logout`       | End current session                              |
+| `touch <file>` | Allocate an Inode for a new file                 |
+| `mkdir <dir>`  | Allocate a Directory Inode                       |
+| `ls`           | List contents with POSIX Octal modes             |
+| `write <fd>`   | Write data sequentially to physical 4KB blocks   |
+| `read <fd>`    | Reconstruct file from physical blocks            |
+| `exit`         | Safely unmount disk & flush Superblock           |
 
-## 🔒 Security Measures
-- Passwords are **hashed using SHA-256** before storing.
-- Admins can create, delete, and manage users.
-- File access is **permission-based**.
-
-## 🛠 Troubleshooting
-### **OpenSSL Library Not Found**
-If you see an error like:
-```sh
-cannot find -lssl: No such file or directory
-```
-Fix it by specifying OpenSSL paths:
-```sh
-g++ -std=c++17 -o svf SVF.cpp -I"C:\OpenSSL-Win64\include" -L"C:\OpenSSL-Win64\lib" -lssl -lcrypto
-```
-
-### **MinGW Not Recognized**
-Ensure MinGW is installed and added to `PATH`.
-```sh
-gcc --version
-```
-If it's missing, reinstall MinGW from [Winlibs](https://winlibs.com/).
+## 🔒 Security Architecture
+- **Argon2id** Memory-Hard password derivation.
+- Strict mapping of UID/GID to operations.
+- Process isolation via Docker containerization.
 
 ## 📜 License
 This project is open-source and available under the **MIT License**.
-
-## 🤝 Contributions
-Contributions are welcome! Feel free to fork and submit pull requests.
-
----
-✅ **Built with C++ & OpenSSL for Secure File Management**
-
