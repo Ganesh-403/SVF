@@ -1,0 +1,1 @@
+CMakeFiles/svf.dir/src/auth/AuthManager.cpp.obj CMakeFiles/svf.dir/src/auth/CryptoUtils.cpp.obj CMakeFiles/svf.dir/src/fuse/fuse_wrapper.cpp.obj CMakeFiles/svf.dir/src/main.cpp.obj CMakeFiles/svf.dir/src/storage/BTree.cpp.obj CMakeFiles/svf.dir/src/storage/VirtualDisk.cpp.obj CMakeFiles/svf.dir/src/vfs/FileSystem.cpp.obj CMakeFiles/svf.dir/src/vfs/Inode.cpp.obj
