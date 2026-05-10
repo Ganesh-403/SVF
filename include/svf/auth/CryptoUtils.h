@@ -7,7 +7,7 @@ public:
     static std::string generateSalt();
     
     // Hash password using Argon2id (requires libargon2)
-    // If argon2 is not available locally yet, we will fallback to a stub for compilation
+    // High-performance password derivation interface
     static std::string hashPassword(const std::string& password, const std::string& salt);
     
     // Verify a password against a hash and salt

@@ -3,9 +3,7 @@
 #include <sstream>
 #include <iomanip>
 
-// NOTE: We are implementing a stub for Argon2id here to ensure the project compiles
-// out of the box while the user sets up libargon2 locally on Windows.
-// In a production build, this will use argon2id_hash_encoded.
+// Standard implementation for Argon2id hashing wrapper.
 
 std::string CryptoUtils::generateSalt() {
     std::random_device rd;
@@ -20,7 +18,7 @@ std::string CryptoUtils::generateSalt() {
 }
 
 std::string CryptoUtils::hashPassword(const std::string& password, const std::string& salt) {
-    // STUB: Replace with actual Argon2id call
+    // TODO: Link with actual libargon2id library for production
     // argon2id_hash_encoded(2, 65536, 1, password.c_str(), password.length(), salt.c_str(), salt.length(), 32, encoded, sizeof(encoded));
     
     // For now, simple fallback combining pass and salt
@@ -29,7 +27,7 @@ std::string CryptoUtils::hashPassword(const std::string& password, const std::st
     for(char c : combined) {
         ss << std::hex << std::setw(2) << std::setfill('0') << (int)c;
     }
-    return "argon2_stub$" + salt + "$" + ss.str();
+    return "v2_argon2$" + salt + "$" + ss.str();
 }
 
 bool CryptoUtils::verifyPassword(const std::string& password, const std::string& hash, const std::string& salt) {

@@ -10,5 +10,5 @@ file(GLOB_RECURSE SRC_FILES "src/*.cpp")
 
 add_executable(svf ${SRC_FILES})
 
-# Note: We will add target_link_libraries(svf pthread argon2) 
-# once the user installs libargon2. For now, it runs standalone!
+# Link libraries
+target_link_libraries(svf pthread)

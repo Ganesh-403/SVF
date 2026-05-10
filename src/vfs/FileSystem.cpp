@@ -326,12 +326,73 @@ bool FileSystem::closeFile(int fd) {
 }
 
 bool FileSystem::deleteFile(const std::string& filePath) {
-    std::cerr << "Delete logic simplified for Phase 4 implementation.\n";
-    return false;
+    if (!authManager.isLoggedIn()) { std::cerr << "ERROR: Must be logged in.\n"; return false; }
+    if (authManager.getCurrentRole() == UserRole::READ_ONLY) { std::cerr << "ERROR: Read-only users cannot delete files.\n"; return false; }
+
+    std::string absPath = getAbsolutePath(filePath);
+    if (fileTable.find(absPath) == fileTable.end()) { std::cerr << "ERROR: File does not exist.\n"; return false; }
+    
+    auto inode = fileTable[absPath];
+    if (inode->getFileType() == DIRECTORY) { std::cerr << "ERROR: Use rmdir for directories.\n"; return false; }
+
+    inode->lockWrite();
+
+    // Free direct blocks
+    for (int i = 0; i < 12; i++) {
+        uint32_t b = inode->getBlockPointer(i);
+        if (b != 0) disk.freeBlock(b);
+    }
+
+    // Free indirect blocks
+    uint32_t indir = inode->getIndirectBlock();
+    if (indir != 0) {
+        uint32_t pointers[1024];
+        disk.readBlock(indir, reinterpret_cast<char*>(pointers));
+        for (int i = 0; i < 1024; i++) {
+            if (pointers[i] != 0) disk.freeBlock(pointers[i]);
+        }
+        disk.freeBlock(indir);
+    }
+
+    disk.freeInode(inode->getDiskData().id);
+    inode->unlockWrite();
+
+    size_t lastSlash = absPath.find_last_of('/');
+    std::string dirPath = (lastSlash == 0) ? "/" : absPath.substr(0, lastSlash);
+    std::string fileName = absPath.substr(lastSlash + 1);
+    
+    auto& dirEntries = directories[dirPath];
+    dirEntries.erase(std::remove(dirEntries.begin(), dirEntries.end(), fileName), dirEntries.end());
+    
+    fileTable.erase(absPath);
+    std::cout << "File deleted: " << absPath << "\n";
+    return true;
 }
 
 bool FileSystem::removeDirectory(const std::string& dirPath) {
-    return false;
+    if (!authManager.isLoggedIn()) { std::cerr << "ERROR: Must be logged in.\n"; return false; }
+    if (authManager.getCurrentRole() == UserRole::READ_ONLY) { std::cerr << "ERROR: Read-only users cannot delete directories.\n"; return false; }
+
+    std::string absPath = getAbsolutePath(dirPath);
+    if (absPath == "/") { std::cerr << "ERROR: Cannot remove root.\n"; return false; }
+    if (directories.find(absPath) == directories.end()) { std::cerr << "ERROR: Directory does not exist.\n"; return false; }
+    
+    if (!directories[absPath].empty()) { std::cerr << "ERROR: Directory not empty.\n"; return false; }
+
+    auto inode = fileTable[absPath];
+    disk.freeInode(inode->getDiskData().id);
+
+    size_t lastSlash = absPath.find_last_of('/');
+    std::string parentPath = (lastSlash == 0) ? "/" : absPath.substr(0, lastSlash);
+    std::string dirName = absPath.substr(lastSlash + 1);
+
+    auto& parentEntries = directories[parentPath];
+    parentEntries.erase(std::remove(parentEntries.begin(), parentEntries.end(), dirName), parentEntries.end());
+
+    directories.erase(absPath);
+    fileTable.erase(absPath);
+    std::cout << "Directory removed: " << absPath << "\n";
+    return true;
 }
 
 void FileSystem::showUserInfo() {
