@@ -1,5 +1,6 @@
 CMakeFiles/svf.dir/src/storage/VirtualDisk.cpp.obj: \
  D:\Projects\SVF\src\storage\VirtualDisk.cpp \
+ D:/Projects/SVF/include/svf/storage/BTree.h \
  D:/Projects/SVF/include/svf/storage/VirtualDisk.h \
  C:/mingw-w64/mingw64/include/c++/14.2.0/string \
  C:/mingw-w64/mingw64/include/c++/14.2.0/bits/requires_hosted.h \
@@ -157,6 +158,15 @@ CMakeFiles/svf.dir/src/storage/VirtualDisk.cpp.obj: \
  C:/mingw-w64/mingw64/include/c++/14.2.0/bits/stl_vector.h \
  C:/mingw-w64/mingw64/include/c++/14.2.0/bits/stl_bvector.h \
  C:/mingw-w64/mingw64/include/c++/14.2.0/bits/vector.tcc \
+ D:/Projects/SVF/include/svf/vfs/Inode.h \
+ C:/mingw-w64/mingw64/include/c++/14.2.0/chrono \
+ C:/mingw-w64/mingw64/include/c++/14.2.0/bits/chrono.h \
+ C:/mingw-w64/mingw64/include/c++/14.2.0/ratio \
+ C:/mingw-w64/mingw64/include/c++/14.2.0/limits \
+ C:/mingw-w64/mingw64/include/c++/14.2.0/ctime \
+ C:/mingw-w64/mingw64/include/c++/14.2.0/bits/parse_numbers.h \
+ C:/mingw-w64/mingw64/include/c++/14.2.0/shared_mutex \
+ C:/mingw-w64/mingw64/include/c++/14.2.0/bits/std_mutex.h \
  C:/mingw-w64/mingw64/include/c++/14.2.0/iostream \
  C:/mingw-w64/mingw64/include/c++/14.2.0/cstring \
  C:/mingw-w64/mingw64/x86_64-w64-mingw32/include/string.h \

@@ -4,7 +4,7 @@
 #include <vector>
 #include <cstdint>
 
-#define MAX_BTREE_DEGREE 64
+#define MAX_BTREE_DEGREE 32
 
 #pragma pack(push, 1)
 struct DirectoryEntry {

@@ -4,140 +4,125 @@
 #include <iostream>
 #include <string>
 
-// Reusing the password masking utility from before
-#ifdef _WIN32
-#include <windows.h>
-void disableEcho() {
-    HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
-    DWORD mode;
-    GetConsoleMode(hStdin, &mode);
-    SetConsoleMode(hStdin, mode & ~ENABLE_ECHO_INPUT);
-}
-void enableEcho() {
-    HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
-    DWORD mode;
-    GetConsoleMode(hStdin, &mode);
-    SetConsoleMode(hStdin, mode | ENABLE_ECHO_INPUT);
-}
-#else
-#include <termios.h>
-#include <unistd.h>
-void disableEcho() {
-    // Basic terminal suppression
-}
-void enableEcho() {
-}
-#endif
-
-std::string getPasswordInput() {
-    disableEcho();
-    std::string password;
-    std::getline(std::cin, password);
-    enableEcho();
-    std::cout << std::endl;
-    return password;
-}
-
 void showHelp() {
-    std::cout << "\nSecure File System V2 Commands:\n";
-    std::cout << "--------------------\n";
-    std::cout << "login <username> <password> - Log in to the system\n";
-    std::cout << "register <username> <password> <role> - Register a new user\n";
-    std::cout << "logout - Log out of the system\n";
-    std::cout << "touch <filename> - Create a new file\n";
-    std::cout << "mkdir <dirname> - Create a new directory\n";
-    std::cout << "cd <dirname> - Change current directory\n";
-    std::cout << "ls [dirname] - List directory contents\n";
-    std::cout << "open <filename> <mode> - Open a file (mode: 1=read, 2=write, 3=read-write)\n";
-    std::cout << "write <fd> <content> - Write content directly to Disk Blocks\n";
-    std::cout << "read <fd> - Read content from Disk Blocks\n";
-    std::cout << "close <fd> - Close an open file\n";
-    std::cout << "exit - Exit the program and safely unmount disk\n";
+    std::cout << "\n--- Available Commands ---\n";
+    std::cout << "  register <user> <pass> <role_id> (role: 0=Admin, 1=User)\n";
+    std::cout << "  login <user> <pass>\n";
+    std::cout << "  ls, mkdir <name>, touch <name>\n";
+    std::cout << "  open <name> 3, write <fd> <text>, read <fd>, close <fd>\n";
+    std::cout << "  df, whoami, exit\n";
+    std::cout << "--------------------------\n";
 }
 
 int main() {
-    std::cout << "Initializing Physical Disk Simulation...\n";
+    std::cout << "[SYSTEM] Starting Secure Virtual File System V2...\n";
+    
     VirtualDisk disk("svf_disk.img");
+    std::cout << "[DISK] Initializing binary storage...\n";
     if (!disk.mount()) {
-        std::cerr << "Failed to mount the virtual disk. Exiting...\n";
+        std::cerr << "[FATAL] Could not mount svf_disk.img. Check folder permissions.\n";
         return 1;
     }
 
     AuthManager authManager;
     FileSystem fs(authManager, disk);
     
+    std::cout << "[VFS] Mounting internal structures...\n";
+    std::cout.flush();
+    
+    bool mountSuccess = false;
+    try {
+        mountSuccess = fs.mount();
+    } catch (const std::exception& e) {
+        std::cerr << "[CRASH] Exception during mount: " << e.what() << "\n";
+        return 1;
+    } catch (...) {
+        std::cerr << "[CRASH] Unknown exception during mount\n";
+        return 1;
+    }
+    
+    std::cout << "[VFS] Mount result: " << (mountSuccess ? "SUCCESS" : "FAILED") << "\n";
+    std::cout.flush();
+    
+    if (!mountSuccess) {
+        std::cerr << "[FATAL] File system structures are corrupt. Try deleting svf_disk.img.\n";
+        return 1;
+    }
+    
+    std::cout << "[READY] System is live. Type 'help' for commands.\n";
+    std::cout.flush();  // Force flush output buffer
+    
     std::string command;
-    bool running = true;
-    
-    std::cout << "Secure File System V2 (Type 'help' for commands)\n";
-    
-    while (running) {
-        std::cout << "> ";
-        std::cin >> command;
+    while (true) {
+        std::cout << "\nsvf-shell> ";
+        std::cout.flush();  // Ensure prompt is printed
+        if (!(std::cin >> command)) {
+            break;
+        }
         
         if (command == "login") {
-            std::string username, password;
-            std::cin >> username;
-            std::cout << "Password: ";
-            std::cin.ignore();
-            password = getPasswordInput();
-            authManager.login(username, password);
+            std::string u, p;
+            if (std::cin >> u >> p) {
+                if (authManager.login(u, p)) {
+                    std::cout << "Welcome back, " << u << "!\n";
+                }
+            }
+        } else if (command == "register") {
+            std::string u, p; int r;
+            if (std::cin >> u >> p >> r) {
+                if (authManager.registerUser(u, p, static_cast<UserRole>(r))) {
+                    std::cout << "User '" << u << "' registered successfully.\n";
+                }
+            }
         } else if (command == "logout") {
             authManager.logout();
         } else if (command == "touch") {
-            std::string filename;
-            std::cin >> filename;
-            fs.createFile(filename);
+            std::string f; std::cin >> f;
+            fs.createFile(f);
         } else if (command == "mkdir") {
-            std::string dirname;
-            std::cin >> dirname;
-            fs.createDirectory(dirname);
+            std::string d; std::cin >> d;
+            fs.createDirectory(d);
         } else if (command == "cd") {
-            std::string dirname;
-            std::cin >> dirname;
-            fs.changeDirectory(dirname);
+            std::string d; std::cin >> d;
+            fs.changeDirectory(d);
         } else if (command == "ls") {
-            std::string dirname;
-            std::getline(std::cin, dirname);
-            if (dirname.empty() || dirname == " ") {
-                fs.listDirectory();
-            } else {
-                fs.listDirectory(dirname.substr(1));
-            }
+            fs.listDirectory();
         } else if (command == "open") {
-            std::string filename;
-            int mode;
-            std::cin >> filename >> mode;
-            fs.openFile(filename, mode);
+            std::string f; int m;
+            std::cin >> f >> m;
+            fs.openFile(f, m);
         } else if (command == "write") {
-            int fd;
-            std::string content;
-            std::cin >> fd;
-            std::cin.ignore();
-            std::getline(std::cin, content);
-            fs.writeFile(fd, content);
+            int fd; std::string c;
+            if (std::cin >> fd) {
+                std::getline(std::cin >> std::ws, c);
+                fs.writeFile(fd, c);
+            }
         } else if (command == "read") {
-            int fd;
-            std::cin >> fd;
-            std::string content = fs.readFile(fd);
-            if (!content.empty()) {
-                std::cout << "Content: " << content << "\n";
+            int fd; 
+            if (std::cin >> fd) {
+                std::string content = fs.readFile(fd);
+                std::cout << "--- FILE CONTENT START ---\n";
+                std::cout << content << "\n";
+                std::cout << "--- FILE CONTENT END ---\n";
             }
         } else if (command == "close") {
-            int fd;
-            std::cin >> fd;
+            int fd; std::cin >> fd;
             fs.closeFile(fd);
+            std::cout << "FD " << fd << " closed.\n";
+        } else if (command == "df") {
+            fs.showDiskUsage();
         } else if (command == "whoami") {
             fs.showUserInfo();
         } else if (command == "help") {
             showHelp();
         } else if (command == "exit") {
-            running = false;
+            break;
         } else {
-            std::cerr << "ERROR: Unknown command. Type 'help' for a list of commands.\n";
+            std::cout << "Unknown command: " << command << " (Type 'help')\n";
         }
     }
 
-    std::cout << "Unmounting Virtual Disk...\n";
+    std::cout << "[SYSTEM] Synchronizing metadata and shutting down...\n";
+    fs.unmount();
     return 0;
 }
