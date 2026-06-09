@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     g++ \
     libssl-dev \
     libargon2-dev \
+    libfuse-dev \
     make \
     && rm -rf /var/lib/apt/lists/*
 

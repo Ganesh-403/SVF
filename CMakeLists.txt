@@ -9,6 +9,11 @@ include_directories(include)
 file(GLOB_RECURSE SRC_FILES "src/*.cpp")
 
 add_executable(svf ${SRC_FILES})
+target_compile_definitions(svf PRIVATE _FILE_OFFSET_BITS=64)
 
 # Link libraries
-target_link_libraries(svf pthread)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_libraries(svf pthread fuse)
+else()
+    target_link_libraries(svf pthread)
+endif()
