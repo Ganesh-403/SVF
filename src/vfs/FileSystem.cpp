@@ -45,7 +45,7 @@ bool FileSystem::mount() {
     std::cout << "[MOUNT] Root inode stored\n";
     std::cout.flush();
     
-    // Scan B-Tree with validation
+    // Scan B-Tree recursively with validation
     uint32_t rootBTreeBlock = rootData.directBlocks[0];
     std::cout << "[MOUNT] Root B-Tree block: " << rootBTreeBlock << "\n";
     std::cout.flush();
@@ -60,57 +60,12 @@ bool FileSystem::mount() {
         return false;
     }
     
-    std::cout << "[MOUNT] Creating BTreeDirectory...\n";
+    std::cout << "[MOUNT] Starting recursive directory load...\n";
     std::cout.flush();
     
     try {
-        BTreeDirectory rootBTree(disk, rootBTreeBlock);
-        std::cout << "[MOUNT] BTreeDirectory created\n";
-        std::cout.flush();
-        
-        std::cout << "[MOUNT] Calling listAll()...\n";
-        std::cout.flush();
-        
-        auto entries = rootBTree.listAll();
-        
-        std::cout << "[MOUNT] Found " << entries.size() << " entries in root directory\n";
-        std::cout.flush();
-        
-        // Validate each entry before loading
-        for (const auto& entry : entries) {
-            // Validate inode ID is in valid range
-            if (entry.inodeId == 0 || entry.inodeId > sb.totalInodes) {
-                std::cerr << "[MOUNT] WARNING: Invalid inodeId: " << entry.inodeId << "\n";
-                continue;
-            }
-            
-            std::string name(entry.fileName);
-            
-            // Validate filename is not empty
-            if (name.empty()) {
-                continue;
-            }
-            
-            DiskInode childData;
-            if (!disk.readInode(entry.inodeId, childData)) {
-                std::cerr << "[MOUNT] WARNING: Failed to read inode " << entry.inodeId << "\n";
-                continue;
-            }
-            
-            // Validate loaded inode data
-            if (childData.id != entry.inodeId) {
-                std::cerr << "[MOUNT] WARNING: Inode ID mismatch for " << name << "\n";
-                continue;
-            }
-            
-            std::string fullPath = (name == "/") ? "/" : "/" + name;
-            if (fullPath != "/") {
-                fileTable[fullPath] = std::make_shared<Inode>(name, childData);
-                directories["/"].push_back(name);
-            }
-        }
-        
-        std::cout << "[MOUNT] About to destroy BTreeDirectory...\n";
+        loadDirectoryRecursive("/", rootBTreeBlock);
+        std::cout << "[MOUNT] Recursive directory load completed\n";
         std::cout.flush();
     } catch (const std::exception& e) {
         std::cerr << "[MOUNT] EXCEPTION: " << e.what() << "\n";
@@ -120,12 +75,44 @@ bool FileSystem::mount() {
         return false;
     }
     
-    std::cout << "[MOUNT] BTreeDirectory destroyed successfully\n";
-    std::cout.flush();
-    
     std::cout << "[MOUNT] Filesystem mounted successfully\n";
     std::cout.flush();
     return true;
+}
+
+void FileSystem::loadDirectoryRecursive(const std::string& dirPath, uint32_t btreeBlock) {
+    if (btreeBlock == 0) return;
+    
+    BTreeDirectory btree(disk, btreeBlock);
+    auto entries = btree.listAll();
+    
+    for (const auto& entry : entries) {
+        if (entry.inodeId == 0 || entry.inodeId > disk.getSuperblock().totalInodes) {
+            continue;
+        }
+        std::string name(entry.fileName);
+        if (name.empty()) continue;
+        
+        DiskInode childData;
+        if (!disk.readInode(entry.inodeId, childData)) {
+            continue;
+        }
+        if (childData.id != entry.inodeId) {
+            continue;
+        }
+        
+        std::string fullPath = (dirPath == "/") ? "/" + name : dirPath + "/" + name;
+        auto inode = std::make_shared<Inode>(name, childData);
+        fileTable[fullPath] = inode;
+        
+        if (childData.fileType == DIRECTORY) {
+            directories[fullPath] = {};
+            directories[dirPath].push_back(name);
+            loadDirectoryRecursive(fullPath, childData.directBlocks[0]);
+        } else {
+            directories[dirPath].push_back(name);
+        }
+    }
 }
 
 bool FileSystem::unmount() {
@@ -202,8 +189,14 @@ void FileSystem::createDirectory(const std::string& dirPath) {
     uint32_t inodeId = disk.allocateInode();
     uint32_t btreeBlock = disk.allocateBlock();
     
-    char zero[4096] = {0};
-    disk.writeBlock(btreeBlock, zero);
+    BTreeNode rootNode;
+    std::memset(&rootNode, 0, sizeof(BTreeNode));
+    rootNode.blockId = btreeBlock;
+    rootNode.isLeaf = true;
+    rootNode.numKeys = 0;
+    char btreeBuffer[4096] = {0};
+    std::memcpy(btreeBuffer, &rootNode, sizeof(BTreeNode));
+    disk.writeBlock(btreeBlock, btreeBuffer);
 
     auto inode = std::make_shared<Inode>(dirName, inodeId, 0755, authManager.getCurrentUser(), DIRECTORY);
     inode->getDiskData().directBlocks[0] = btreeBlock;
@@ -289,16 +282,12 @@ void FileSystem::writeFile(int fd, const std::string& content) {
         inode->getDiskData().modificationTime = 
             std::chrono::system_clock::now().time_since_epoch().count();
         
-        // Release lock before I/O (lock guards in-memory data only)
-        inode->unlockWrite();
-        
-        // Perform I/O operations outside of lock
+        // Perform I/O operations inside of lock to prevent race conditions
         char buffer[4096] = {0};
         std::memcpy(buffer, content.c_str(), std::min((size_t)4095, content.length()));
         disk.writeBlock(block, buffer);
         
-        // Re-acquire lock to write persistent metadata
-        inode->lockWrite();
+        // Write persistent metadata
         disk.writeInode(inode->getDiskData().id, inode->getDiskData());
         inode->unlockWrite();
         
@@ -326,13 +315,13 @@ std::string FileSystem::readFile(int fd) {
             return "";
         }
         
-        // Release lock before I/O operation (lock guards in-memory data only)
-        inode->unlockRead();
-        
+        // Perform I/O operation inside of lock to prevent race conditions
         char buffer[4096] = {0};
         disk.readBlock(block, buffer);
         
-        return std::string(buffer, std::min((uint32_t)4095, fileSize));
+        std::string result(buffer, std::min((uint32_t)4095, fileSize));
+        inode->unlockRead();
+        return result;
     } catch (...) {
         inode->unlockRead();
         throw;
@@ -360,5 +349,143 @@ void FileSystem::showDiskUsage() {
     std::cout << "  Free Inodes: " << sb.freeInodes << "\n";
 }
 
-bool FileSystem::deleteFile(const std::string& filePath) { return false; }
-bool FileSystem::removeDirectory(const std::string& dirPath) { return false; }
+bool FileSystem::deleteFile(const std::string& filePath) {
+    std::string absPath = getAbsolutePath(filePath);
+    if (fileTable.find(absPath) == fileTable.end()) {
+        std::cout << "Error: File not found.\n";
+        return false;
+    }
+    
+    auto inode = fileTable[absPath];
+    if (inode->getFileType() == DIRECTORY) {
+        std::cout << "Error: Is a directory.\n";
+        return false;
+    }
+    
+    // Check if the file is currently open
+    for (const auto& [fd, openInode] : openFileTable) {
+        if (openInode->getDiskData().id == inode->getDiskData().id) {
+            std::cout << "Error: File is open.\n";
+            return false;
+        }
+    }
+    
+    size_t lastSlash = absPath.find_last_of('/');
+    std::string dirPath = absPath.substr(0, lastSlash == 0 ? 1 : lastSlash);
+    std::string fileName = absPath.substr(lastSlash + 1);
+    
+    // 1. Free blocks
+    inode->lockWrite();
+    for (int i = 0; i < 12; ++i) {
+        uint32_t b = inode->getDiskData().directBlocks[i];
+        if (b != 0) {
+            disk.freeBlock(b);
+            inode->getDiskData().directBlocks[i] = 0;
+        }
+    }
+    uint32_t indBlock = inode->getIndirectBlock();
+    if (indBlock != 0) {
+        uint32_t indBuffer[1024];
+        if (disk.readBlock(indBlock, reinterpret_cast<char*>(indBuffer))) {
+            for (int i = 0; i < 1024; ++i) {
+                if (indBuffer[i] != 0) {
+                    disk.freeBlock(indBuffer[i]);
+                }
+            }
+        }
+        disk.freeBlock(indBlock);
+        inode->setIndirectBlock(0);
+    }
+    
+    // 2. Free inode
+    uint32_t inodeId = inode->getDiskData().id;
+    disk.freeInode(inodeId);
+    inode->unlockWrite();
+    
+    // 3. Remove entry from parent directory B-Tree
+    auto parentInode = fileTable[dirPath];
+    if (parentInode) {
+        parentInode->lockWrite();
+        parentInode->getDiskData().modificationTime = 
+            std::chrono::system_clock::now().time_since_epoch().count();
+        parentInode->unlockWrite();
+        
+        BTreeDirectory dirBTree(disk, parentInode->getDiskData().directBlocks[0]);
+        dirBTree.remove(fileName);
+        
+        disk.writeInode(parentInode->getDiskData().id, parentInode->getDiskData());
+    }
+    
+    // 4. Remove from caches
+    fileTable.erase(absPath);
+    
+    auto& list = directories[dirPath];
+    list.erase(std::remove(list.begin(), list.end(), fileName), list.end());
+    
+    return true;
+}
+
+bool FileSystem::removeDirectory(const std::string& dirPath) {
+    std::string absPath = getAbsolutePath(dirPath);
+    if (absPath == "/") {
+        std::cout << "Error: Cannot delete root directory.\n";
+        return false;
+    }
+    
+    if (fileTable.find(absPath) == fileTable.end()) {
+        std::cout << "Error: Directory not found.\n";
+        return false;
+    }
+    
+    auto inode = fileTable[absPath];
+    if (inode->getFileType() != DIRECTORY) {
+        std::cout << "Error: Not a directory.\n";
+        return false;
+    }
+    
+    // Check if directory is empty
+    if (!directories[absPath].empty()) {
+        std::cout << "Error: Directory not empty.\n";
+        return false;
+    }
+    
+    size_t lastSlash = absPath.find_last_of('/');
+    std::string parentPath = absPath.substr(0, lastSlash == 0 ? 1 : lastSlash);
+    std::string dirName = absPath.substr(lastSlash + 1);
+    
+    inode->lockWrite();
+    // Free the B-tree root block
+    uint32_t btreeBlock = inode->getDiskData().directBlocks[0];
+    if (btreeBlock != 0) {
+        disk.freeBlock(btreeBlock);
+        inode->getDiskData().directBlocks[0] = 0;
+    }
+    
+    // Free the inode
+    uint32_t inodeId = inode->getDiskData().id;
+    disk.freeInode(inodeId);
+    inode->unlockWrite();
+    
+    // Remove from parent B-Tree
+    auto parentInode = fileTable[parentPath];
+    if (parentInode) {
+        parentInode->lockWrite();
+        parentInode->getDiskData().modificationTime = 
+            std::chrono::system_clock::now().time_since_epoch().count();
+        parentInode->unlockWrite();
+        
+        BTreeDirectory parentBTree(disk, parentInode->getDiskData().directBlocks[0]);
+        parentBTree.remove(dirName);
+        
+        disk.writeInode(parentInode->getDiskData().id, parentInode->getDiskData());
+    }
+    
+    // Remove from caches
+    fileTable.erase(absPath);
+    directories.erase(absPath);
+    
+    auto& list = directories[parentPath];
+    list.erase(std::remove(list.begin(), list.end(), dirName), list.end());
+    
+    return true;
+}

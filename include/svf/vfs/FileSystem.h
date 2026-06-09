@@ -23,6 +23,7 @@ private:
     std::string getAbsolutePath(const std::string& path);
     bool isPathValid(const std::string& path);
     bool hasPermission(const std::string& path, int reqPermission);
+    void loadDirectoryRecursive(const std::string& dirPath, uint32_t btreeBlock);
 
 public:
     FileSystem(AuthManager& authManager, VirtualDisk& disk);

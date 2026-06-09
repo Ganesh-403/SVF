@@ -35,6 +35,7 @@ public:
     // Core B-Tree Operations mapped to Physical Disk Blocks
     void insert(const std::string& fileName, uint32_t inodeId);
     uint32_t search(const std::string& fileName);
+    void remove(const std::string& fileName);
     std::vector<DirectoryEntry> listAll();
     
     uint32_t getRootBlock() const { return rootBlockId; }

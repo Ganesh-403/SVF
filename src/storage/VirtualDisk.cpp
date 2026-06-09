@@ -79,8 +79,15 @@ void VirtualDisk::format() {
     root.directBlocks[0] = superblock.rootDirectoryBlock;
     writeInode(1, root);
 
-    // Initialize Root Directory Block with zeros
-    writeBlock(superblock.rootDirectoryBlock, zero);
+    // Initialize Root Directory Block as a valid empty B-Tree leaf node
+    BTreeNode rootNode;
+    std::memset(&rootNode, 0, sizeof(BTreeNode));
+    rootNode.blockId = superblock.rootDirectoryBlock;
+    rootNode.isLeaf = true;
+    rootNode.numKeys = 0;
+    char btreeBuffer[4096] = {0};
+    std::memcpy(btreeBuffer, &rootNode, sizeof(BTreeNode));
+    writeBlock(superblock.rootDirectoryBlock, btreeBuffer);
 
     std::cout << "Virtual Disk Formatted Successfully.\n";
 }

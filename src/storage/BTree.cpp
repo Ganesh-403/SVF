@@ -2,6 +2,26 @@
 #include <iostream>
 #include <cstring>
 #include <algorithm>
+#include <memory>
+
+static bool readBTreeNode(VirtualDisk& disk, uint32_t blockId, BTreeNode& node) {
+    if (blockId == 0) return false;
+    char buffer[4096];
+    if (!disk.readBlock(blockId, buffer)) {
+        return false;
+    }
+    std::memset(&node, 0, sizeof(BTreeNode));
+    std::memcpy(&node, buffer, sizeof(BTreeNode));
+    return true;
+}
+
+static bool writeBTreeNode(VirtualDisk& disk, uint32_t blockId, const BTreeNode& node) {
+    if (blockId == 0) return false;
+    char buffer[4096];
+    std::memset(buffer, 0, sizeof(buffer));
+    std::memcpy(buffer, &node, sizeof(BTreeNode));
+    return disk.writeBlock(blockId, buffer);
+}
 
 BTreeDirectory::BTreeDirectory(VirtualDisk& disk, uint32_t rootBlock) 
     : disk(disk), rootBlockId(rootBlock) {
@@ -12,7 +32,7 @@ BTreeDirectory::BTreeDirectory(VirtualDisk& disk, uint32_t rootBlock)
         root.blockId = rootBlockId;
         root.isLeaf = true;
         root.numKeys = 0;
-        disk.writeBlock(rootBlockId, reinterpret_cast<const char*>(&root));
+        writeBTreeNode(disk, rootBlockId, root);
     }
 }
 
@@ -49,9 +69,9 @@ void BTreeDirectory::splitChild(BTreeNode& parent, int i, BTreeNode& y) {
     parent.entries[i] = y.entries[t - 1];
     parent.numKeys++;
     
-    disk.writeBlock(y.blockId, reinterpret_cast<const char*>(&y));
-    disk.writeBlock(z.blockId, reinterpret_cast<const char*>(&z));
-    disk.writeBlock(parent.blockId, reinterpret_cast<const char*>(&parent));
+    writeBTreeNode(disk, y.blockId, y);
+    writeBTreeNode(disk, z.blockId, z);
+    writeBTreeNode(disk, parent.blockId, parent);
 }
 
 void BTreeDirectory::insertNonFull(BTreeNode& node, const DirectoryEntry& entry) {
@@ -64,7 +84,7 @@ void BTreeDirectory::insertNonFull(BTreeNode& node, const DirectoryEntry& entry)
         }
         node.entries[i + 1] = entry;
         node.numKeys++;
-        disk.writeBlock(node.blockId, reinterpret_cast<const char*>(&node));
+        writeBTreeNode(disk, node.blockId, node);
     } else {
         while (i >= 0 && std::strcmp(entry.fileName, node.entries[i].fileName) < 0) {
             i--;
@@ -72,14 +92,20 @@ void BTreeDirectory::insertNonFull(BTreeNode& node, const DirectoryEntry& entry)
         i++;
         
         BTreeNode child;
-        disk.readBlock(node.children[i], reinterpret_cast<char*>(&child));
+        if (!readBTreeNode(disk, node.children[i], child)) {
+            std::cerr << "ERROR: Failed to read B-Tree child node at block " << node.children[i] << "\n";
+            return;
+        }
         
         if (child.numKeys == MAX_BTREE_DEGREE - 1) {
             splitChild(node, i, child);
             if (std::strcmp(entry.fileName, node.entries[i].fileName) > 0) {
                 i++;
             }
-            disk.readBlock(node.children[i], reinterpret_cast<char*>(&child));
+            if (!readBTreeNode(disk, node.children[i], child)) {
+                std::cerr << "ERROR: Failed to read B-Tree child node after split at block " << node.children[i] << "\n";
+                return;
+            }
         }
         insertNonFull(child, entry);
     }
@@ -87,7 +113,10 @@ void BTreeDirectory::insertNonFull(BTreeNode& node, const DirectoryEntry& entry)
 
 void BTreeDirectory::insert(const std::string& fileName, uint32_t inodeId) {
     BTreeNode root;
-    disk.readBlock(rootBlockId, reinterpret_cast<char*>(&root));
+    if (!readBTreeNode(disk, rootBlockId, root)) {
+        std::cerr << "ERROR: Failed to read B-Tree root block " << rootBlockId << "\n";
+        return;
+    }
     
     DirectoryEntry entry;
     entry.inodeId = inodeId;
@@ -120,7 +149,7 @@ uint32_t BTreeDirectory::search(const std::string& fileName) {
         iterationCount++;
         
         BTreeNode node;
-        if (!disk.readBlock(currentBlock, reinterpret_cast<char*>(&node))) {
+        if (!readBTreeNode(disk, currentBlock, node)) {
             std::cerr << "ERROR: Failed to read B-Tree node at block " << currentBlock << "\n";
             return 0;
         }
@@ -184,61 +213,122 @@ uint32_t BTreeDirectory::search(const std::string& fileName) {
 static void collectEntriesRecursive(VirtualDisk& disk, uint32_t blockId, 
                                      std::vector<DirectoryEntry>& result,
                                      int recursionDepth = 0) {
-    std::cout << "[BTREE_REC] START blockId=" << blockId << " depth=" << recursionDepth << "\n";
-    std::cout.flush();
-    
-    if (blockId == 0) {
-        std::cout << "[BTREE_REC] blockId is 0, returning\n";
-        std::cout.flush();
+    if (blockId == 0) return;
+    if (recursionDepth > 64) {
+        std::cerr << "ERROR: B-Tree recursion depth limit exceeded in listAll\n";
         return;
     }
     
-    std::cout << "[BTREE_REC] About to allocate node\n";
-    std::cout.flush();
+    auto node = std::make_unique<BTreeNode>();
+    if (!readBTreeNode(disk, blockId, *node)) {
+        return;
+    }
     
+    if (node->blockId != blockId) {
+        return; // Block ID mismatch guard
+    }
+    
+    // Add all keys in the current node
+    for (uint32_t i = 0; i < node->numKeys; ++i) {
+        if (node->entries[i].inodeId != 0) {
+            result.push_back(node->entries[i]);
+        }
+    }
+    
+    // Recurse into children
+    if (!node->isLeaf) {
+        for (uint32_t i = 0; i <= node->numKeys; ++i) {
+            if (node->children[i] != 0) {
+                collectEntriesRecursive(disk, node->children[i], result, recursionDepth + 1);
+            }
+        }
+    }
+}
+
+static DirectoryEntry getPredecessor(VirtualDisk& disk, uint32_t blockId) {
+    auto node = std::make_unique<BTreeNode>();
+    if (!readBTreeNode(disk, blockId, *node)) {
+        return DirectoryEntry{0, ""};
+    }
+    while (!node->isLeaf) {
+        uint32_t nextBlock = node->children[node->numKeys];
+        if (!readBTreeNode(disk, nextBlock, *node)) {
+            break;
+        }
+    }
+    return node->entries[node->numKeys - 1];
+}
+
+static bool removeFromSubtree(VirtualDisk& disk, uint32_t blockId, const std::string& fileName) {
+    if (blockId == 0) return false;
+    
+    auto node = std::make_unique<BTreeNode>();
+    if (!readBTreeNode(disk, blockId, *node)) {
+        return false;
+    }
+    
+    // Find if the key exists in this node
+    int i = 0;
+    while (i < (int)node->numKeys) {
+        char safeName[61];
+        std::strncpy(safeName, node->entries[i].fileName, 60);
+        safeName[60] = '\0';
+        int cmp = std::strcmp(fileName.c_str(), safeName);
+        if (cmp > 0) {
+            i++;
+        } else {
+            break;
+        }
+    }
+    
+    bool found = false;
+    if (i < (int)node->numKeys) {
+        char safeName[61];
+        std::strncpy(safeName, node->entries[i].fileName, 60);
+        safeName[60] = '\0';
+        if (std::strcmp(fileName.c_str(), safeName) == 0) {
+            found = true;
+        }
+    }
+    
+    if (found) {
+        if (node->isLeaf) {
+            // Case 1: Key is in leaf node. Shift entries left.
+            for (uint32_t j = i; j < node->numKeys - 1; ++j) {
+                node->entries[j] = node->entries[j + 1];
+            }
+            node->numKeys--;
+            writeBTreeNode(disk, blockId, *node);
+            return true;
+        } else {
+            // Case 2: Key is in internal node.
+            // Replace with predecessor.
+            DirectoryEntry pred = getPredecessor(disk, node->children[i]);
+            if (pred.inodeId == 0) {
+                return false;
+            }
+            node->entries[i] = pred;
+            writeBTreeNode(disk, blockId, *node);
+            // Recursively delete the predecessor from the subtree.
+            return removeFromSubtree(disk, node->children[i], pred.fileName);
+        }
+    } else {
+        if (node->isLeaf) {
+            return false; // Key not found
+        }
+        if (node->children[i] == 0) return false;
+        // Recurse on the child that should contain the key
+        return removeFromSubtree(disk, node->children[i], fileName);
+    }
+}
+
+void BTreeDirectory::remove(const std::string& fileName) {
     try {
-        BTreeNode* node = new BTreeNode();
-        std::cout << "[BTREE_REC] Node allocated\n";
-        std::cout.flush();
-
-        std::cout << "[BTREE_REC] About to read block\n";
-        std::cout.flush();
-
-        // Read into a raw block buffer to avoid overflowing the BTreeNode structure
-        uint32_t blockSize = disk.getSuperblock().blockSize;
-        char* raw = new char[blockSize];
-        if (!disk.readBlock(blockId, raw)) {
-            std::cout << "[BTREE_REC] readBlock failed\n";
-            std::cout.flush();
-            delete[] raw;
-            delete node;
-            return;
-        }
-
-        std::cout << "[BTREE_REC] Block read OK (raw)\n";
-        std::cout.flush();
-
-        // Safely copy only the size of the BTreeNode struct
-        std::memset(node, 0, sizeof(BTreeNode));
-        std::memcpy(node, raw, std::min<size_t>(sizeof(BTreeNode), blockSize));
-        delete[] raw;
-
-        if (node->numKeys == 0 && node->blockId == 0) {
-            std::cout << "[BTREE_REC] Empty node, deleting and returning\n";
-            std::cout.flush();
-            delete node;
-            return;
-        }
-
-        std::cout << "[BTREE_REC] About to delete node\n";
-        std::cout.flush();
-        delete node;
-
-        std::cout << "[BTREE_REC] Node deleted, returning\n";
-        std::cout.flush();
+        removeFromSubtree(disk, rootBlockId, fileName);
+    } catch (const std::exception& e) {
+        std::cerr << "[BTREE] EXCEPTION in remove: " << e.what() << "\n";
     } catch (...) {
-        std::cout << "[BTREE_REC] EXCEPTION caught!\n";
-        std::cout.flush();
+        std::cerr << "[BTREE] UNKNOWN EXCEPTION in remove\n";
     }
 }
 
@@ -247,17 +337,11 @@ std::vector<DirectoryEntry> BTreeDirectory::listAll() {
     result.reserve(100);
     
     try {
-        std::cout << "[BTREE] listAll() calling collectEntriesRecursive\n";
-        std::cout.flush();
         collectEntriesRecursive(disk, rootBlockId, result, 0);
-        std::cout << "[BTREE] listAll() collectEntriesRecursive returned\n";
-        std::cout.flush();
     } catch (const std::exception& e) {
-        std::cout << "[BTREE] EXCEPTION in listAll: " << e.what() << "\n";
-        std::cout.flush();
+        std::cerr << "[BTREE] EXCEPTION in listAll: " << e.what() << "\n";
     } catch (...) {
-        std::cout << "[BTREE] UNKNOWN EXCEPTION in listAll\n";
-        std::cout.flush();
+        std::cerr << "[BTREE] UNKNOWN EXCEPTION in listAll\n";
     }
     
     return result;

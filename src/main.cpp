@@ -9,6 +9,7 @@ void showHelp() {
     std::cout << "  register <user> <pass> <role_id> (role: 0=Admin, 1=User)\n";
     std::cout << "  login <user> <pass>\n";
     std::cout << "  ls, mkdir <name>, touch <name>\n";
+    std::cout << "  rm <name>, rmdir <name>\n";
     std::cout << "  open <name> 3, write <fd> <text>, read <fd>, close <fd>\n";
     std::cout << "  df, whoami, exit\n";
     std::cout << "--------------------------\n";
@@ -82,6 +83,12 @@ int main() {
         } else if (command == "mkdir") {
             std::string d; std::cin >> d;
             fs.createDirectory(d);
+        } else if (command == "rm") {
+            std::string f; std::cin >> f;
+            fs.deleteFile(f);
+        } else if (command == "rmdir") {
+            std::string d; std::cin >> d;
+            fs.removeDirectory(d);
         } else if (command == "cd") {
             std::string d; std::cin >> d;
             fs.changeDirectory(d);
