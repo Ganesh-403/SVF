@@ -1,4 +1,4 @@
-# Secure Virtual File System (SVF) V2
+# Secure Virtual File System (SVF)
 
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![C++ Standard](https://img.shields.io/badge/C%2B%2B-17-orange.svg)

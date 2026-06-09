@@ -123,7 +123,7 @@ std::string AuthManager::hashPassword(const std::string& password, const std::st
     ss << std::hex << std::setw(16) << std::setfill('0') << hashValue;
     ss << std::hex << std::setw(16) << std::setfill('0') << hashValue2;
     
-    return "v2_secure_hash$" + salt + "$" + ss.str();
+    return "svf_secure_hash$" + salt + "$" + ss.str();
 }
 
 bool AuthManager::verifyPassword(const std::string& password, const std::string& hash, const std::string& salt) {

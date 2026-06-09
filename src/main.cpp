@@ -16,7 +16,7 @@ void showHelp() {
 }
 
 int main() {
-    std::cout << "[SYSTEM] Starting Secure Virtual File System V2...\n";
+    std::cout << "[SYSTEM] Starting Secure Virtual File System (SVF)...\n";
     
     VirtualDisk disk("svf_disk.img");
     std::cout << "[DISK] Initializing binary storage...\n";
