@@ -23,6 +23,11 @@ private:
     UserRole currentUserRole;
     std::string usersFilePath;
 
+    // Cryptographic helper methods
+    static std::string generateSalt();
+    static std::string hashPassword(const std::string& password, const std::string& salt);
+    static bool verifyPassword(const std::string& password, const std::string& hash, const std::string& salt);
+
 public:
     AuthManager(const std::string& filePath = "users.dat");
     ~AuthManager();

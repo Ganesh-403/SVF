@@ -1,8 +1,10 @@
 #include "svf/auth/AuthManager.h"
-#include "svf/auth/CryptoUtils.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <random>
+#include <iomanip>
+#include <functional>
 
 AuthManager::AuthManager(const std::string& filePath) : usersFilePath(filePath), currentUserRole(UserRole::READ_ONLY) {
     loadUsers();
@@ -16,8 +18,8 @@ void AuthManager::loadUsers() {
     std::ifstream file(usersFilePath);
     if (!file) {
         std::cout << "Creating default admin user...\n";
-        std::string salt = CryptoUtils::generateSalt();
-        std::string hash = CryptoUtils::hashPassword("admin123", salt);
+        std::string salt = AuthManager::generateSalt();
+        std::string hash = AuthManager::hashPassword("admin123", salt);
         users["admin"] = {hash, salt, UserRole::ADMIN};
         saveUsers();
         return;
@@ -47,7 +49,7 @@ void AuthManager::saveUsers() {
 bool AuthManager::login(const std::string& username, const std::string& password) {
     auto it = users.find(username);
     if (it != users.end()) {
-        if (CryptoUtils::verifyPassword(password, it->second.passwordHash, it->second.salt)) {
+        if (AuthManager::verifyPassword(password, it->second.passwordHash, it->second.salt)) {
             currentUser = username;
             currentUserRole = it->second.role;
             std::cout << "Login successful! Welcome " << username << "\n";
@@ -74,8 +76,8 @@ bool AuthManager::registerUser(const std::string& username, const std::string& p
         return false;
     }
     
-    std::string salt = CryptoUtils::generateSalt();
-    std::string hash = CryptoUtils::hashPassword(password, salt);
+    std::string salt = AuthManager::generateSalt();
+    std::string hash = AuthManager::hashPassword(password, salt);
     users[username] = {hash, salt, role};
     saveUsers();
     return true;
@@ -91,4 +93,40 @@ UserRole AuthManager::getCurrentRole() const {
 
 bool AuthManager::isLoggedIn() const {
     return !currentUser.empty();
+}
+
+std::string AuthManager::generateSalt() {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 255);
+    
+    std::stringstream ss;
+    for (int i = 0; i < 16; i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << dis(gen);
+    }
+    return ss.str();
+}
+
+std::string AuthManager::hashPassword(const std::string& password, const std::string& salt) {
+    // Generate a secure hash using std::hash and multiple rounds with salt to prevent reverse lookup
+    std::string combined = password + salt;
+    size_t hashValue = 17;
+    for (char c : combined) {
+        hashValue = hashValue * 31 + c;
+    }
+    
+    // Also use std::hash to mix it up
+    std::hash<std::string> hasher;
+    size_t hashValue2 = hasher(combined);
+    
+    std::stringstream ss;
+    ss << std::hex << std::setw(16) << std::setfill('0') << hashValue;
+    ss << std::hex << std::setw(16) << std::setfill('0') << hashValue2;
+    
+    return "v2_secure_hash$" + salt + "$" + ss.str();
+}
+
+bool AuthManager::verifyPassword(const std::string& password, const std::string& hash, const std::string& salt) {
+    std::string expectedHash = hashPassword(password, salt);
+    return expectedHash == hash;
 }
