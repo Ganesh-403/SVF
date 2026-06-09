@@ -63,6 +63,8 @@ The virtual shell operates over the physical block engine:
 | `ls`           | List contents with POSIX Octal modes             |
 | `write <fd>`   | Write data sequentially to physical 4KB blocks   |
 | `read <fd>`    | Reconstruct file from physical blocks            |
+| `rm <file>`    | Delete a file and free its allocated blocks      |
+| `rmdir <dir>`  | Remove an empty directory                        |
 | `exit`         | Safely unmount disk & flush Superblock           |
 
 ## 🔒 Security Architecture
